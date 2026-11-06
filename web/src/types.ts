@@ -396,7 +396,7 @@ export interface TaskRelations {
   related: TaskRelationSummary[];
 }
 
-export type AgentPlatform = "claude" | "pi" | "agy" | "grok";
+export type AgentPlatform = "claude" | "pi" | "agy" | "grok" | "paseo";
 
 export interface AgentSession {
   platform: AgentPlatform;
@@ -416,6 +416,11 @@ export type TaskConversationRef = TaskConversationRefBase & (
   | { agentSession: AgentSession }
 );
 
+export interface TaskExecutionTarget {
+  provider: "claude" | "codex" | "kimi" | "pi";
+  model?: string;
+}
+
 export interface Task {
   id: string;
   identifier: string;
@@ -430,6 +435,7 @@ export interface Task {
   threadBinding: CodexThreadBinding | null;
   legacyLocalThreadId: string | null;
   agentSession?: AgentSession | null;
+  executionTarget?: TaskExecutionTarget | null;
   conversationRefs: TaskConversationRef[];
   participants: ActorIdentity[];
   previewImage: Attachment | null;
@@ -543,6 +549,7 @@ export interface TaskDraft {
   priority: TaskPriority;
   labels: string[];
   assigneeTarget?: AssigneeTarget;
+  executionTarget?: TaskExecutionTarget | null;
   developmentContext: DevelopmentContext | null;
   startDate: string | null;
   dueDate: string | null;

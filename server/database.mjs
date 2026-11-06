@@ -87,6 +87,7 @@ function taskFromRow(row) {
     threadBinding: threadBindingFromRow(row),
     legacyLocalThreadId: legacyLocalThreadIdFromRow(row),
     agentSession: agentSessionFromRow(row),
+    executionTarget: row.execution_target == null ? null : JSON.parse(row.execution_target),
     creatorType: row.creator_type,
     creatorId: row.creator_id,
     creatorName: row.creator_name,
@@ -537,6 +538,9 @@ export class TaskboardDatabase {
     const migratedTaskColumns = this.database.prepare("PRAGMA table_info(tasks)").all();
     if (!migratedTaskColumns.some((column) => column.name === "agent_session")) {
       this.database.exec("ALTER TABLE tasks ADD COLUMN agent_session TEXT");
+    }
+    if (!migratedTaskColumns.some((column) => column.name === "execution_target")) {
+      this.database.exec("ALTER TABLE tasks ADD COLUMN execution_target TEXT");
     }
     if (!migratedTaskColumns.some((column) => column.name === "creator_type")) {
       this.database.exec("ALTER TABLE tasks ADD COLUMN creator_type TEXT NOT NULL DEFAULT 'user'");
@@ -1865,8 +1869,8 @@ export class TaskboardDatabase {
           assignee_type, assignee_id, assignee_name, assignee_avatar_url,
           git_branch, worktree_path, worktree_branch,
           start_date, due_date, recurrence_interval, recurrence_unit,
-          archived_at, version, created_at, updated_at, agent_session
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)
+          archived_at, version, created_at, updated_at, agent_session, execution_target
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?, ?)
       `).run(
         id,
         identifier,
@@ -1896,6 +1900,7 @@ export class TaskboardDatabase {
         timestamp,
         timestamp,
         input.agentSession ? JSON.stringify(input.agentSession) : null,
+        input.executionTarget ? JSON.stringify(input.executionTarget) : null,
       );
       this.database.exec("COMMIT");
       return this.getTask(id);
@@ -1953,6 +1958,7 @@ export class TaskboardDatabase {
       labels: "labels",
       startDate: "start_date",
       dueDate: "due_date",
+      executionTarget: "execution_target",
     };
     const assignments = [];
     const values = [];
@@ -1982,7 +1988,7 @@ export class TaskboardDatabase {
         continue;
       }
       assignments.push(`${columns[key]} = ?`);
-      values.push(key === "labels" ? JSON.stringify(value) : value);
+      values.push(key === "labels" || (key === "executionTarget" && value !== null) ? JSON.stringify(value) : value);
     }
     if (Object.hasOwn(changes, "status") && changes.status !== current.status) {
       const placementProjectId = projectChanged ? targetProject.id : current.projectId;

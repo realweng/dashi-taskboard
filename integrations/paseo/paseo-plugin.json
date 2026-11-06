@@ -1,0 +1,8 @@
+{
+  "id": "taskboard",
+  "name": "Taskboard",
+  "description": "按订阅额度调度 Claude、Codex、Kimi 和 Pi，回写任务进度与执行结果。",
+  "requirements": {
+    "paseo": ">=0.15.0"
+  }
+}

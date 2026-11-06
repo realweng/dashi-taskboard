@@ -1,9 +1,10 @@
 import type { ActorIdentity, AssigneeTarget } from "./types";
+import { currentHostBrand } from "./hostBrand";
 
 export const CODEX_AGENT_ACTOR: ActorIdentity = {
   type: "agent",
   id: "codex-agent",
-  name: "Codex Agent",
+  name: currentHostBrand().agentName,
   avatarUrl: null,
 };
 

@@ -52,7 +52,7 @@ taskctl cloud logout [--json]
 
 `cloud login` reads the shared password from a private `Shared key:` prompt. The actor name is the display attribution sent through Basic Authentication. The local companion stores its configuration with mode `0600`; project mappings stay on the current device and can differ between collaborators. In cloud mode, failed upstream writes fail rather than falling back to or double-writing the local SQLite database.
 
-Every issue or comment write requires conversation attribution. For Codex, `taskctl` reads `CODEX_THREAD_ID` or accepts explicit `--thread-id ID` (which takes precedence). For Claude Code, Pi, Google Antigravity CLI (AGY), and xAI Grok CLI, pass **both** `--agent-platform claude|pi|agy|grok` and `--session-id ID`. External attribution ignores `CODEX_THREAD_ID` and cannot be combined with `--thread-id`. No external session environment variables are inferred. Read commands do not require a conversation ID.
+Every issue or comment write requires conversation attribution. For Codex, `taskctl` reads `CODEX_THREAD_ID` or accepts explicit `--thread-id ID` (which takes precedence). For Claude Code, Pi, Google Antigravity CLI (AGY), xAI Grok CLI, and Paseo, pass **both** `--agent-platform claude|pi|agy|grok|paseo` and `--session-id ID`. External attribution ignores `CODEX_THREAD_ID` and cannot be combined with `--thread-id`. No external session environment variables are inferred. Read commands do not require a conversation ID.
 
 Except for built-in help, every successful command writes one JSON object with `schemaVersion` to stdout. The current schema version is `2`. Errors write one JSON object to stderr. Exit codes are `0` for success, `2` for invalid input, `3` when the service is unavailable, `4` for API or response errors, and `5` for conflicts.
 
@@ -80,6 +80,8 @@ Task/comment JSON exposes `agentSession: { "platform": "pi", "sessionId": "..." 
 
 External attribution never writes to Codex `threadId` or the native five-field `threadBinding`. Existing native bindings remain intact. `issue move` and `comment add` still accept explicit, independent Codex `--binding-*` options; they must describe a real native Codex session, not the external controller. When both metadata and a native binding are present, the UI shows separate entries rather than relabeling a Codex session. Existing author/assignee identities are unchanged; the original tool is identified by the session metadata badge, not inferred from an actor name.
 
+For a task executed by the Paseo scheduler, use `--agent-platform paseo --session-id '<real-paseo-agent-id>'`, regardless of whether that agent runs Claude, Codex, Kimi, or Pi. The plugin persists the full server/workspace/provider/model/worktree mapping and records it in an issue comment. The scheduler's execution binding uses that saved mapping plus the task's Paseo `agentSession`; it does not fabricate a Codex `threadBinding`. It must not claim a task owned by another conversation or overwrite an existing native binding or external session. The copied Paseo command opens the agent through the local Paseo daemon; use the plugin's saved server mapping when navigating to an agent on another host.
+
 The detail view shows the original tool, ID/path, and copy button for both tasks and comments. The card conversation action copies for external sessions; it never sends them to `codex://` or the embedded Codex host. Copied commands use these fixed official entry points:
 
 | Tool | Command |
@@ -88,6 +90,7 @@ The detail view shows the original tool, ID/path, and copy button for both tasks
 | Pi coding agent | `pi --session <path-or-id>` |
 | Google Antigravity CLI (AGY) | `agy --conversation <conversation-id>` |
 | xAI Grok CLI | `grok --resume <id>` |
+| Paseo | `paseo agent open <agent-id>` |
 | Existing Codex | `codex resume <thread-id>` |
 
 The full original value is preserved without trimming or Codex prefix normalization. IDs are limited to 256 characters, or 4096 for Pi paths/IDs. Empty/blank values, control characters, and a leading option dash are rejected. Copying quotes shell metacharacters and apostrophes as **one POSIX-shell argument** for sh/bash/zsh; this is not a PowerShell/cmd quoting mode. Run in the original tool's environment with the original session files, workspace, and credentials available. An ID or a syntactically correct command alone is not evidence of a restored session.

@@ -15,6 +15,7 @@ import {
   type Recurrence,
   type Task,
   type TaskDraft,
+  type TaskExecutionTarget,
   type TaskPriority,
   type TaskStatus,
 } from "../types";
@@ -50,6 +51,7 @@ import {
 import { InlineMediaComposer, type InlineMediaComposerHandle } from "./InlineMediaComposer";
 import { TaskPropertyPicker } from "./TaskPropertyPicker";
 import { TaskboardIcon } from "./TaskboardIcon";
+import { isPaseoHost, listPaseoModels, type PaseoModel } from "../paseoHost";
 
 const RECURRENCE_UNITS: Record<TaskboardLanguage, Record<Recurrence["unit"], string>> = {
   zh: {
@@ -88,6 +90,7 @@ export interface NewTaskEditorDraft {
   assignee: ActorIdentity;
   selectedLabels: string[];
   developmentContext: DevelopmentContext | null;
+  executionTarget?: TaskExecutionTarget | null;
   startDate: string;
   dueDate: string;
   recurrence: Recurrence | null;
@@ -185,6 +188,11 @@ export function TaskEditor({
   const [assignee, setAssignee] = useState<ActorIdentity>(initialDraft?.assignee ?? currentUser);
   const [selectedLabels, setSelectedLabels] = useState<string[]>(initialDraft?.selectedLabels ?? []);
   const [developmentContext, setDevelopmentContext] = useState<DevelopmentContext | null>(initialDraft?.developmentContext ?? null);
+  const [executionTarget, setExecutionTarget] = useState<TaskExecutionTarget | null>(initialDraft?.executionTarget ?? null);
+  const [paseoModels, setPaseoModels] = useState<PaseoModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState("");
+  const paseo = isPaseoHost();
   const [startDate] = useState(initialDraft?.startDate ?? "");
   const [dueDate, setDueDate] = useState(initialDraft?.dueDate ?? "");
   const [recurrence, setRecurrence] = useState<Recurrence | null>(initialDraft?.recurrence ?? null);
@@ -192,13 +200,26 @@ export function TaskEditor({
   const [relatedIds, setRelatedIds] = useState<string[]>(initialDraft?.relations.relatedIds ?? []);
   const [subIssueIds, setSubIssueIds] = useState<string[]>(initialDraft?.relations.subIssueIds ?? []);
   const [createMore, setCreateMore] = useState(false);
-  const [menu, setMenu] = useState<"project" | "status" | "priority" | "assignee" | "labels" | "development" | "more" | "due" | "recurrence" | null>(null);
+  const [menu, setMenu] = useState<"project" | "status" | "priority" | "assignee" | "labels" | "development" | "agent" | "model" | "more" | "due" | "recurrence" | null>(null);
   const [relationMenu, setRelationMenu] = useState<DraftRelationMenu | null>(null);
   const [moreMenuPosition, setMoreMenuPosition] = useState<{ right: number; bottom: number } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<TaskEditorError | null>(null);
   const [attachmentError, setAttachmentError] = useState<TaskEditorError | null>(null);
+
+  useEffect(() => {
+    const provider = executionTarget?.provider;
+    setPaseoModels([]);
+    setModelsError("");
+    if (!paseo || !provider) { setModelsLoading(false); return; }
+    let active = true;
+    setModelsLoading(true);
+    void listPaseoModels(provider).then(models => { if (active) setPaseoModels(models); })
+      .catch(error => { if (active) setModelsError(error instanceof Error ? error.message : String(error)); })
+      .finally(() => { if (active) setModelsLoading(false); });
+    return () => { active = false; };
+  }, [executionTarget?.provider, paseo]);
 
   const developmentOptions = useMemo(() => {
     const options = [...developmentScan.contexts];
@@ -382,6 +403,7 @@ export function TaskEditor({
         labels: selectedLabels,
         ...(assigneeTarget ? { assigneeTarget } : {}),
         developmentContext,
+        executionTarget,
         startDate: startDate || null,
         dueDate: dueDate || null,
         recurrence,
@@ -435,6 +457,7 @@ export function TaskEditor({
       assignee,
       selectedLabels,
       developmentContext,
+      executionTarget,
       startDate,
       dueDate,
       recurrence,
@@ -604,6 +627,40 @@ export function TaskEditor({
               onChange={setSelectedLabels}
               onCreateLabel={onCreateLabel}
             />
+
+            {paseo && <>
+              <TaskPropertyPicker
+                value={executionTarget?.provider ?? ""}
+                options={[
+                  { value: "", label: text("Agent：自动分配", "Agent: automatic"), icon: <LinearIcon name="terminal" /> },
+                  ...(["claude", "codex", "kimi", "pi"] as const).map(provider => ({ value: provider,
+                    label: `Agent：${{ claude: "Claude", codex: "Codex", kimi: "Kimi", pi: "Pi" }[provider]}`,
+                    icon: <LinearIcon name="terminal" />,
+                  })),
+                ]}
+                open={menu === "agent"}
+                disabled={saving}
+                triggerClassName="property-control"
+                ariaLabel={text("执行 Agent", "Execution agent")}
+                title={text("指定 Agent 后按该选择执行；不可用时等待。", "A specified agent is used exclusively; wait if unavailable.")}
+                onOpenChange={open => setMenu(open ? "agent" : null)}
+                onChange={value => setExecutionTarget(value ? { provider: value as TaskExecutionTarget["provider"] } : null)}
+              />
+              {executionTarget && <TaskPropertyPicker
+                value={executionTarget.model ?? ""}
+                options={[
+                  { value: "", label: modelsLoading ? text("正在读取模型…", "Loading models…") : text("模型：按调度配置", "Model: dispatch settings"), icon: <LinearIcon name="displayOptions" /> },
+                  ...paseoModels.map(model => ({ value: model.id, label: model.name, icon: <LinearIcon name="displayOptions" /> })),
+                ]}
+                open={menu === "model"}
+                disabled={saving || modelsLoading}
+                triggerClassName="property-control"
+                ariaLabel={text("执行模型", "Execution model")}
+                onOpenChange={open => setMenu(open ? "model" : null)}
+                onChange={model => setExecutionTarget({ provider: executionTarget.provider, ...(model ? { model } : {}) })}
+              />}
+              {!!modelsError && <span role="alert">{modelsError}</span>}
+            </>}
 
             <TaskPropertyPicker
               value={contextValue(developmentContext)}

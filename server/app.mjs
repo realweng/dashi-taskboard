@@ -2142,12 +2142,25 @@ export function createTaskboardServer(options = {}) {
 
       const projectSummaryRoute = pathname.match(/^\/api\/local\/projects\/([^/]+)\/summary$/);
       if (projectSummaryRoute) {
-        if (request.method !== "GET") return methodNotAllowed(response, ["GET"]);
-        assertNoQuery(url.searchParams, "GET /api/local/projects/:id/summary");
+        assertNoQuery(url.searchParams, "/api/local/projects/:id/summary");
         const projectId = validateProjectId(
           decodeRouteSegment(projectSummaryRoute[1], "Project id"),
         );
-        return sendJson(response, 200, projectSummary.get(projectId));
+        if (request.method === "GET") {
+          return sendJson(response, 200, projectSummary.get(projectId));
+        }
+        if (request.method === "POST") {
+          const input = await readJson(request);
+          const summary = typeof input?.summary === "string" ? input.summary.replace(/\s+/g, " ").trim() : "";
+          if (!summary || summary.length > 4_000) {
+            throw new ApiError(400, "INVALID_FIELD", "'summary' must be a non-empty string of at most 4000 characters");
+          }
+          if (!database.getProject(projectId)) {
+            throw new ApiError(404, "PROJECT_NOT_FOUND", `Project '${projectId}' was not found`);
+          }
+          return sendJson(response, 200, database.saveProjectSummary(projectId, summary));
+        }
+        return methodNotAllowed(response, ["GET", "POST"]);
       }
 
       if (pathname === "/api/local/ai/threads") {

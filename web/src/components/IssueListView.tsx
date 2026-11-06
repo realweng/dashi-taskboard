@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { assigneeTargetForActor } from "../actors";
 import { taskPriorityLabel, taskStatusLabel, useTaskboardI18n } from "../i18n";
+import { currentHostBrand } from "../hostBrand";
 import { labelPresentation } from "../labels";
 import type { TaskCardPresentation } from "../taskConversations";
 import { TASK_PRIORITIES, TASK_STATUSES, type ActorIdentity, type Task, type TaskDraft, type TaskStatus } from "../types";
@@ -43,6 +44,7 @@ export function IssueListView({
   onUpdate,
 }: IssueListViewProps) {
   const { language, locale, text } = useTaskboardI18n();
+  const agentActorName = currentHostBrand().agentName;
   const [collapsed, setCollapsed] = useState(() => new Set(COLLAPSED_BY_DEFAULT));
   const [priorityMenuTaskId, setPriorityMenuTaskId] = useState<string | null>(null);
 
@@ -153,7 +155,7 @@ export function IssueListView({
                               onChange={(event) => void onUpdate(task, { assigneeTarget: event.target.value as "current-user" | "codex-agent" }).catch(() => {})}
                             >
                               <option value="current-user">{currentUser.name}</option>
-                              <option value="codex-agent">Codex Agent</option>
+                              <option value="codex-agent">{agentActorName}</option>
                             </select>
                           </label>
                         </span>
