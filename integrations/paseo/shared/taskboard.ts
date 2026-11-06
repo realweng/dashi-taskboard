@@ -59,3 +59,5 @@ export const checkNow = defineRpc({ name: "taskboard.check", input: z.object({})
 export const continueRun = defineRpc({ name: "taskboard.continue", input: z.object({ agentId: z.string() }), output: z.object({ message: z.string() }) });
 export const openBoard = defineRpc({ name: "taskboard.url", input: z.object({}), output: z.object({ url: z.string() }) });
 export const modelCatalog = defineRpc({ name: "taskboard.models", input: z.object({ provider: providerSchema }), output: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() })) }) });
+export const listPaseoProjects = defineRpc({ name: "taskboard.paseo-projects", input: z.object({}), output: z.object({ projects: z.array(z.object({ id: z.string(), name: z.string(), workspacePath: z.string() })) }) });
+export const summarizeProject = defineRpc({ name: "taskboard.summarize-project", input: z.object({ projectId: z.string().min(1) }), output: z.object({ summary: z.string(), provider: providerSchema, model: z.string() }) });

@@ -5,6 +5,7 @@ import dueDoneIcon from "../assets/figma-taskboard/dashboard-due-done.svg";
 import dueEditIcon from "../assets/figma-taskboard/dashboard-due-edit.svg";
 import processingAnimation from "../assets/figma-taskboard/loading-16.svg";
 import { getProjectSummary } from "../api";
+import { generatePaseoSummary, isPaseoHost } from "../paseoHost";
 import { taskPriorityLabel, taskStatusLabel, useTaskboardI18n } from "../i18n";
 import { labelPresentation } from "../labels";
 import { actorKey } from "../actors";
@@ -513,6 +514,8 @@ export function DashboardView({
   const { language, locale, text } = useTaskboardI18n();
   const [projectSummary, setProjectSummary] = useState<ProjectSummary | null>(null);
   const [summaryLoadFailed, setSummaryLoadFailed] = useState(false);
+  const [paseoSummaryPending, setPaseoSummaryPending] = useState(false);
+  const paseoSummaryAttemptRef = useRef<string | null>(null);
   useEffect(() => {
     if (isAllProjects) {
       setProjectSummary(null);
@@ -533,6 +536,21 @@ export function DashboardView({
         setProjectSummary(next);
         setSummaryLoadFailed(false);
         if (next.refreshing) delay = 2_000;
+        else if (
+          isPaseoHost()
+          && (next.error || !next.summary)
+          && paseoSummaryAttemptRef.current !== projectId
+        ) {
+          // Paseo 宿主下改走插件的多账号额度池生成，插件写回后立即重读。
+          paseoSummaryAttemptRef.current = projectId;
+          setPaseoSummaryPending(true);
+          try {
+            await generatePaseoSummary(projectId);
+          } catch { /* 失败时下轮轮询展示接口返回的错误 */ }
+          if (disposed) return;
+          setPaseoSummaryPending(false);
+          delay = 0;
+        }
       } catch (error) {
         if (disposed || (error instanceof Error && error.name === "AbortError")) return;
         setSummaryLoadFailed(true);
@@ -727,7 +745,7 @@ export function DashboardView({
         `Across all projects, ${tasks.length} issues are tracked: ${completedTasks.length} completed and ${activeTasks.length} still open; ${tasks.filter((task) => task.status === "blocked").length} are blocked and ${overdueTasks.length} overdue.`,
       )
     : projectSummary?.summary
-      ?? (projectSummary?.refreshing
+      ?? (projectSummary?.refreshing || paseoSummaryPending
         ? text(
             `${brand.name} 正在整理当前项目的进展、风险和下一步重点…`,
             `${brand.name} is reviewing the project's progress, risks, and next steps…`,

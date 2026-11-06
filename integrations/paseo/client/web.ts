@@ -10,11 +10,16 @@ declare const window: {
   removeEventListener(type: "message", listener: (event: FrameMessage) => void): void;
 };
 
+export interface PaseoProjectChoice { id: string; name: string; workspacePath: string }
+export interface PaseoSummaryResult { summary: string; provider: string; model: string }
+
 // Keep the existing DOM-based Taskboard in its own document. Browser-only
 // rendering lives here; the scheduler screen still uses native components.
-export function TaskboardFrame({ url, color, loadModels, zoom = 1 }: {
+export function TaskboardFrame({ url, color, loadModels, loadProjects, summarize, zoom = 1 }: {
   url: string; color: string; zoom?: number;
   loadModels: (input: { provider: Route["provider"] }) => Promise<{ models: { id: string; name: string }[] }>;
+  loadProjects: (input: Record<string, never>) => Promise<{ projects: PaseoProjectChoice[] }>;
+  summarize: (input: { projectId: string }) => Promise<PaseoSummaryResult>;
 }): ReactElement {
   const frame = useRef<FrameElement | null>(null);
   const frameUrl = new URL(url);
@@ -25,17 +30,28 @@ export function TaskboardFrame({ url, color, loadModels, zoom = 1 }: {
     const receive = (event: FrameMessage) => {
       if (event.source !== frame.current?.contentWindow || event.origin !== origin || !event.data || typeof event.data !== "object") return;
       const data = event.data as Record<string, unknown>;
-      if (data.type !== "taskboard:paseo-models-request" || typeof data.requestId !== "string") return;
-      const provider = providerSchema.safeParse(data.provider);
-      if (!provider.success) return;
-      const respond = (result: object) => frame.current?.contentWindow?.postMessage({
-        type: "taskboard:paseo-models-response", requestId: data.requestId, ...result,
+      if (typeof data.requestId !== "string") return;
+      const respond = (type: string) => (result: object) => frame.current?.contentWindow?.postMessage({
+        type, requestId: data.requestId, ...result,
       }, origin);
-      void loadModels({ provider: provider.data }).then(respond).catch(error => respond({ error: error instanceof Error ? error.message : String(error) }));
+      const fail = (type: string) => (error: unknown) => respond(type)({ error: error instanceof Error ? error.message : String(error) });
+      if (data.type === "taskboard:paseo-models-request") {
+        const provider = providerSchema.safeParse(data.provider);
+        if (!provider.success) return;
+        void loadModels({ provider: provider.data }).then(respond("taskboard:paseo-models-response")).catch(fail("taskboard:paseo-models-response"));
+        return;
+      }
+      if (data.type === "taskboard:paseo-projects-request") {
+        void loadProjects({}).then(respond("taskboard:paseo-projects-response")).catch(fail("taskboard:paseo-projects-response"));
+        return;
+      }
+      if (data.type === "taskboard:paseo-summary-request" && typeof data.projectId === "string") {
+        void summarize({ projectId: data.projectId }).then(respond("taskboard:paseo-summary-response")).catch(fail("taskboard:paseo-summary-response"));
+      }
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [origin, loadModels]);
+  }, [origin, loadModels, loadProjects, summarize]);
   if (Platform.OS !== "web") {
     return createElement(Text, { style: { color } }, "完整任务面板目前支持在 Paseo 桌面版内显示。");
   }

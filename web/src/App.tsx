@@ -142,6 +142,7 @@ import {
   type TaskDraft,
   type TaskStatus,
 } from "./types";
+import { isPaseoHost, listPaseoProjects, type PaseoProject } from "./paseoHost";
 // The poller stays in ESM JavaScript so its lifecycle can be tested directly with node:test.
 // @ts-expect-error The module's option contract is enforced by its focused node tests.
 import { createRevisionPoller, createRevisionWebSocketClient, getRevisionPollingInterval, getRevisionWebSocketConfig } from "./revisionPolling.mjs";
@@ -193,6 +194,7 @@ interface ProjectChoice {
   inCodex: boolean;
   persisted: boolean;
   codexIdentity: CodexProjectIdentity | null;
+  workspacePath?: string | null;
 }
 
 interface ProjectContextMenuState {
@@ -765,6 +767,7 @@ export function App() {
   const [recentProjectIds, setRecentProjectIds] = useState(readRecentProjectIds);
   const initialProjectId = query.get("project") ?? recentProjectIds[0] ?? ALL_PROJECTS_ID;
   const [projects, setProjects] = useState<Project[]>([]);
+  const [paseoProjects, setPaseoProjects] = useState<PaseoProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
@@ -1170,6 +1173,14 @@ export function App() {
     project.id,
     project.id === GLOBAL_PROJECT_ID ? text("临时任务", "Temporary tasks") : project.name,
   ])), [projects, text]);
+  useEffect(() => {
+    if (!isPaseoHost()) return undefined;
+    let disposed = false;
+    listPaseoProjects()
+      .then((list) => { if (!disposed) setPaseoProjects(list); })
+      .catch(() => { /* 发现失败时项目菜单保持现状 */ });
+    return () => { disposed = true; };
+  }, []);
   const projectChoices = useMemo<ProjectChoice[]>(() => {
     const persistedById = new Map(projects.map((project) => [project.id, project]));
     const seen = new Set<string>();
@@ -1195,6 +1206,21 @@ export function App() {
           : null,
       });
     }
+    for (const project of paseoProjects) {
+      // 面板项目 id 必须是小写 slug；Paseo 的 prj_xxx 形式需要转换后才能导入。
+      const id = project.id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      if (!id || !project.name || seen.has(id)) continue;
+      seen.add(id);
+      choices.push({
+        id,
+        name: persistedById.get(id)?.name ?? project.name,
+        issueCount: persistedById.get(id)?.issueCount ?? 0,
+        inCodex: false,
+        persisted: persistedById.has(id),
+        codexIdentity: null,
+        workspacePath: project.workspacePath,
+      });
+    }
     for (const project of projects) {
       if (seen.has(project.id)) continue;
       choices.push({
@@ -1217,7 +1243,7 @@ export function App() {
       ...sortedChoices.filter((project) => project.issueCount > 0),
       ...sortedChoices.filter((project) => project.issueCount === 0),
     ];
-  }, [hostContext?.projects, projectCodexIdentities, projects, recentProjectIds, text]);
+  }, [hostContext?.projects, paseoProjects, projectCodexIdentities, projects, recentProjectIds, text]);
   const projectMenuCandidates = projectChoices.filter(
     (project) => project.id !== GLOBAL_PROJECT_ID || project.issueCount > 0,
   );
@@ -3188,7 +3214,7 @@ export function App() {
           project = await createProjectRequest({
             id: choice.id,
             name: choice.name,
-            workspacePath: null,
+            workspacePath: choice.workspacePath ?? null,
           });
           setProjects((current) => [...current, project!]);
         } catch (error) {

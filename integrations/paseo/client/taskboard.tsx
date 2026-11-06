@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { TaskboardFrame } from "./web";
 import {
-  checkNow, continueRun, modelCatalog, openBoard, readBoard, saveConfig,
+  checkNow, continueRun, listPaseoProjects, modelCatalog, openBoard, readBoard, saveConfig, summarizeProject,
   type DispatchConfig, type Route,
 } from "../shared/taskboard";
 
@@ -79,6 +79,8 @@ export function TaskboardScreen({ theme, layout, navigation, host }: PluginScree
   const inspect = useRpc(checkNow);
   const board = useRpc(openBoard);
   const catalog = useRpc(modelCatalog);
+  const projects = useRpc(listPaseoProjects);
+  const summarize = useRpc(summarizeProject);
   const resume = useRpc(continueRun);
   const snapshot = useQuery({
     queryKey: ["taskboard", host.id],
@@ -185,7 +187,7 @@ export function TaskboardScreen({ theme, layout, navigation, host }: PluginScree
       </View>}
     </View>
     {view === "board" ? <View style={{ flex: 1, minHeight: 0 }}>
-      {boardAddress.data && !boardAddress.error && <TaskboardFrame key={`${host.id}:${frameVersion}`} url={boardAddress.data.url} color={theme.colors.foreground} loadModels={catalog} zoom={zoom} />}
+      {boardAddress.data && !boardAddress.error && <TaskboardFrame key={`${host.id}:${frameVersion}`} url={boardAddress.data.url} color={theme.colors.foreground} loadModels={catalog} loadProjects={projects} summarize={summarize} zoom={zoom} />}
       {boardAddress.isPending && <Text style={[styles.muted, { padding: 20 }]}>正在连接任务面板…</Text>}
       {!!boardAddress.error && <View style={{ padding: 20, gap: 12 }}>
         <Text style={styles.text}>无法连接任务面板：{boardAddress.error instanceof Error ? boardAddress.error.message : String(boardAddress.error)}</Text>

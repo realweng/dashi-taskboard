@@ -1,5 +1,5 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { checkNow, continueRun, modelCatalog, openBoard, readBoard, saveConfig } from "./shared/taskboard";
+import { checkNow, continueRun, listPaseoProjects, modelCatalog, openBoard, readBoard, saveConfig, summarizeProject } from "./shared/taskboard";
 import { Dispatcher } from "./server/dispatcher";
 
 export default function contribute(server: PluginServerContext) {
@@ -22,6 +22,8 @@ export default function contribute(server: PluginServerContext) {
   server.handle(continueRun, async ({ agentId }, { paseo }) => ({ message: await (await get(paseo)).continue(agentId) }));
   server.handle(openBoard, async (_, { paseo }) => ({ url: await (await get(paseo)).boardUrl() }));
   server.handle(modelCatalog, async ({ provider }, { paseo }) => ({ models: await (await get(paseo)).models(provider) }));
+  server.handle(listPaseoProjects, async (_, { paseo }) => ({ projects: await (await get(paseo)).paseoProjects() }));
+  server.handle(summarizeProject, async ({ projectId }, { paseo }) => (await get(paseo)).summarize(projectId));
   const unhook = server.on("agent.created", async (_, { paseo }) => { await get(paseo); });
   return () => { unhook(); dispatcher?.stop(); };
 }

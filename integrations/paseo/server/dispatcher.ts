@@ -99,6 +99,60 @@ export class Dispatcher {
   }
   async boardUrl() { return new Taskctl(this.state.config).url(); }
 
+  async paseoProjects() {
+    const result = await this.paseo.projects.list();
+    return result.projects.map((project) => ({
+      id: project.projectId,
+      name: project.projectCustomName || project.projectDisplayName,
+      workspacePath: project.projectRootPath,
+    }));
+  }
+
+  async summarize(projectId: string): Promise<{ summary: string; provider: Route["provider"]; model: string }> {
+    const config = this.state.config;
+    const board = new Taskctl(config);
+    const { projects } = await board.call<{ projects: BoardProject[] }>("project", "list");
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error(`面板中不存在项目 ${projectId}。`);
+    const workspacePath = config.projects.find((item) => item.id === projectId)?.workspacePath || project.workspacePath;
+    if (!workspacePath || !path.isAbsolute(workspacePath)) throw new Error("请先在自动调度配置中为该项目填写工作目录。");
+    const quotas = await this.quotas();
+    const available = await this.paseo.providers.listAvailable();
+    const ranked = config.routes
+      .filter((route) => route.enabled && subscriptionSource(route) && route.quotaId.startsWith(`${subscriptionSource(route)}:`)
+        && available.providers.some((item) => item.provider === route.provider && item.available))
+      .map((route) => ({ route, score: quotaScore(quotas.find((quota) => quota.id === route.quotaId), config.reservePercent) }))
+      .filter((entry) => entry.score >= 0)
+      .sort((a, b) => b.score - a.score);
+    if (!ranked.length) throw new Error("没有可用额度的路由，请等待额度恢复或调整配置。");
+    const route = ranked[0].route;
+    const { tasks } = await board.call<{ tasks: SummaryTask[] }>("issue", "list", "--project", projectId);
+    const workspace = await this.paseo.workspaces.create({ title: `项目总结 · ${project.name}`,
+      source: { kind: "directory", path: workspacePath } });
+    const agent = await workspace.agents.create({ config: {
+      provider: `${route.provider}/${route.model}`, modeId: route.modeId,
+      thinkingOptionId: route.thinkingOptionId, featureValues: route.featureValues,
+    }, title: `项目总结 · ${project.name}` });
+    try {
+      await agent.send(buildSummaryPrompt(project.name, tasks));
+      let result = await agent.waitForFinish(10_000);
+      for (let attempt = 0; result.status === "timeout" && attempt < 30; attempt += 1) {
+        result = await agent.waitForFinish(10_000);
+      }
+      if (result.status !== "idle" || !result.lastMessage) throw new Error(result.error || "Agent 未返回项目总结。");
+      const summary = result.lastMessage.replace(/\s+/g, " ").trim();
+      if (!summary) throw new Error("Agent 未返回项目总结。");
+      const saved = await fetch(new URL(`/api/local/projects/${encodeURIComponent(projectId)}/summary`, await board.url()), {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ summary }),
+      });
+      if (!saved.ok) throw new Error(`项目总结写回面板失败（HTTP ${saved.status}）。`);
+      return { summary, provider: route.provider, model: route.model };
+    } finally {
+      await agent.archive().catch(() => {});
+      await workspace.archive().catch(() => {});
+    }
+  }
+
   async tick(force: boolean): Promise<string> {
     if (this.busy) return "正在检查任务。";
     if (this.stopped) return "调度器已停止。";
@@ -309,6 +363,37 @@ function subscriptionSource(route: Route) {
   if (route.model.startsWith("anthropic/")) return "claude";
   if (route.model.startsWith("openai-codex/")) return "codex";
   return null;
+}
+type SummaryTask = Issue & { priority?: string; dueDate?: string | null; activityUpdatedAt?: string };
+const summaryStatusLabels: Record<string, string> = {
+  backlog: "积压事项", todo: "待办", in_progress: "处理中", in_review: "等你确认",
+  blocked: "遇到阻碍", done: "完成", canceled: "取消",
+};
+// Same output contract as server/project-summary.mjs so both generators can
+// feed the same dashboard card.
+function buildSummaryPrompt(projectName: string, tasks: SummaryTask[]) {
+  const dayMs = 24 * 60 * 60 * 1_000;
+  const counts = Object.fromEntries(Object.entries(summaryStatusLabels).map(([status, label]) => [
+    label, tasks.filter((task) => task.status === status).length,
+  ]));
+  const recentCutoff = Date.now() - 7 * dayMs;
+  const issues = tasks.filter((task) => (
+    (task.status !== "done" && task.status !== "canceled")
+    || (task.activityUpdatedAt ? new Date(task.activityUpdatedAt).getTime() >= recentCutoff : false)
+  )).map((task) => ({
+    id: task.identifier,
+    title: task.title,
+    status: summaryStatusLabels[task.status] || task.status,
+    priority: task.priority,
+    labels: task.labels,
+    dueDate: task.dueDate,
+    updatedAt: task.activityUpdatedAt,
+  }));
+  return [
+    "请根据下面的任务面板快照，为项目负责人写一段项目总结。",
+    "要求：只输出一段 60 至 120 字的简体中文；直接说明当前进展、主要风险或阻碍、下一步重点；不要使用标题、列表或 Markdown；不要调用工具。",
+    JSON.stringify({ project: projectName, generatedForDate: new Date().toISOString().slice(0, 10), counts, issues }),
+  ].join("\n\n");
 }
 function buildPrompt(task: Issue, comments: { body: string }[], attachments: unknown[]) {
   return [
