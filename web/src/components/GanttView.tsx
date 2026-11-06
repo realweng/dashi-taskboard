@@ -4,6 +4,7 @@ import "../vendor/dhtmlxgantt.css";
 import type { Task, TaskDraft } from "../types";
 import type { TaskCardPresentation } from "../taskConversations";
 import { useTaskboardI18n } from "../i18n";
+import { currentHostBrand } from "../hostBrand";
 import { LinearIcon } from "./LinearIcon";
 import { DueDateIcon } from "./SemanticIcons";
 import { taskboardIconSource } from "./TaskboardIcon";
@@ -186,7 +187,7 @@ export function GanttView({ tasks, presentations, hasActiveFilters, zoom, hideCo
         ? `${ganttDate(start, i18nRef.current.locale)} — ${ganttDate(displayEnd, i18nRef.current.locale)}`
         : `${ganttDate(start, i18nRef.current.locale, true)} — ${ganttDate(displayEnd, i18nRef.current.locale, true)}`;
       const avatar = task.taskboardAssigneeType === "agent"
-        ? `<img src="codex-agent-logo.png" alt="">`
+        ? `<img src="${currentHostBrand().agentLogo}" alt="">`
         : task.taskboardAssigneeAvatarUrl
         ? `<img src="${escapeHtml(task.taskboardAssigneeAvatarUrl)}" alt="">`
         : `<span>${escapeHtml(task.taskboardAssigneeInitial)}</span>`;

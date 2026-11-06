@@ -8,6 +8,7 @@ import { getProjectSummary } from "../api";
 import { taskPriorityLabel, taskStatusLabel, useTaskboardI18n } from "../i18n";
 import { labelPresentation } from "../labels";
 import { actorKey } from "../actors";
+import { currentHostBrand } from "../hostBrand";
 import type {
   TaskCardPresentation,
   TaskConversationItem,
@@ -266,15 +267,16 @@ function DashboardSummary({
     return () => clearTimeout(timer);
   }, [animateSummaryOnMount, projectId, summary, summaryReady]);
 
+  const brand = currentHostBrand();
   return (
-    <section className="dashboard-codex-summary" aria-label={text("Codex 项目总结", "Codex project summary")}>
+    <section className="dashboard-codex-summary" aria-label={text(`${brand.name} 项目总结`, `${brand.name} project summary`)}>
       <div className="dashboard-summary-bubble">
         <p
           className={summaryTyping ? "is-typing" : undefined}
-          aria-label={summaryReady ? summary : text("Codex 正在整理项目总结", "Codex is preparing the project summary")}
+          aria-label={summaryReady ? summary : text(`${brand.name} 正在整理项目总结`, `${brand.name} is preparing the project summary`)}
         >{displayedSummary}</p>
       </div>
-      <img className="dashboard-codex-mark" src="codex-agent-logo.png" alt="" aria-hidden="true" />
+      <img className="dashboard-codex-mark" src={brand.agentLogo} alt="" aria-hidden="true" />
     </section>
   );
 }
@@ -718,6 +720,7 @@ export function DashboardView({
     })
     .slice(0, 5), [activeTasks, presentations]);
 
+  const brand = currentHostBrand();
   const summaryBody = isAllProjects
     ? text(
         `所有项目共有 ${tasks.length} 个议题，${completedTasks.length} 个已完成，${activeTasks.length} 个尚未结束；当前 ${tasks.filter((task) => task.status === "blocked").length} 个遇到阻碍，${overdueTasks.length} 个已逾期。`,
@@ -726,14 +729,14 @@ export function DashboardView({
     : projectSummary?.summary
       ?? (projectSummary?.refreshing
         ? text(
-            "Codex 正在整理当前项目的进展、风险和下一步重点…",
-            "Codex is reviewing the project's progress, risks, and next steps…",
+            `${brand.name} 正在整理当前项目的进展、风险和下一步重点…`,
+            `${brand.name} is reviewing the project's progress, risks, and next steps…`,
           )
         : summaryLoadFailed || projectSummary?.error
-          ? text("Codex 暂时无法生成项目总结。", "Codex cannot generate the project summary now.")
+          ? text(`${brand.name} 暂时无法生成项目总结。`, `${brand.name} cannot generate the project summary now.`)
           : text(
-              "Codex 正在整理当前项目的进展、风险和下一步重点…",
-              "Codex is reviewing the project's progress, risks, and next steps…",
+              `${brand.name} 正在整理当前项目的进展、风险和下一步重点…`,
+              `${brand.name} is reviewing the project's progress, risks, and next steps…`,
             ));
   const hour = new Date().getHours();
   const greeting = hour < 12
