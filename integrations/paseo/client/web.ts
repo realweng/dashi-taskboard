@@ -12,8 +12,8 @@ declare const window: {
 
 // Keep the existing DOM-based Taskboard in its own document. Browser-only
 // rendering lives here; the scheduler screen still uses native components.
-export function TaskboardFrame({ url, color, loadModels }: {
-  url: string; color: string;
+export function TaskboardFrame({ url, color, loadModels, zoom = 1 }: {
+  url: string; color: string; zoom?: number;
   loadModels: (input: { provider: Route["provider"] }) => Promise<{ models: { id: string; name: string }[] }>;
 }): ReactElement {
   const frame = useRef<FrameElement | null>(null);
@@ -43,6 +43,6 @@ export function TaskboardFrame({ url, color, loadModels }: {
     ref: (element: FrameElement | null) => { frame.current = element; },
     src: frameUrl.href,
     title: "Taskboard 任务面板",
-    style: { display: "block", width: "100%", height: "100%", flex: 1, border: 0, minHeight: 0 },
+    style: { display: "block", width: "100%", height: "100%", flex: 1, border: 0, minHeight: 0, zoom },
   });
 }

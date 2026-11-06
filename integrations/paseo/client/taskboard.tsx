@@ -1,7 +1,7 @@
 import { useRpc, type PluginScreenProps } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { TaskboardFrame } from "./web";
 import {
   checkNow, continueRun, modelCatalog, openBoard, readBoard, saveConfig,
@@ -14,6 +14,23 @@ type Model = { id: string; name: string };
 
 function displayTime(value: string | null) {
   return value ? new Date(value).toLocaleString() : "未提供";
+}
+
+const zoomKey = "taskboard:board-zoom";
+const zoomSteps = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+declare const window: { localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void } } | undefined;
+
+function readZoom(): number {
+  if (Platform.OS !== "web" || typeof window === "undefined") return 1;
+  try {
+    const saved = Number(window.localStorage.getItem(zoomKey));
+    return zoomSteps.includes(saved) ? saved : 1;
+  } catch { return 1; }
+}
+
+function storeZoom(zoom: number) {
+  if (Platform.OS !== "web" || typeof window === "undefined") return;
+  try { window.localStorage.setItem(zoomKey, String(zoom)); } catch { /* 显示偏好丢失不影响功能 */ }
 }
 
 function screenStyles(theme: PluginScreenProps["theme"], compact: boolean) {
@@ -77,6 +94,7 @@ export function TaskboardScreen({ theme, layout, navigation, host }: PluginScree
   const [notice, setNotice] = useState("");
   const [view, setView] = useState<"board" | "automation">("board");
   const [frameVersion, setFrameVersion] = useState(0);
+  const [zoom, setZoom] = useState(readZoom);
   const boardAddress = useQuery({
     queryKey: ["taskboard-url", host.id, snapshot.data?.config.runtimeFile],
     queryFn: () => board({}),
@@ -115,6 +133,17 @@ export function TaskboardScreen({ theme, layout, navigation, host }: PluginScree
     });
   }
 
+  function applyZoom(next: number) {
+    setZoom(next);
+    storeZoom(next);
+  }
+
+  function stepZoom(direction: 1 | -1) {
+    const index = zoomSteps.indexOf(zoom);
+    const next = zoomSteps[Math.min(zoomSteps.length - 1, Math.max(0, index + direction))];
+    if (next !== zoom) applyZoom(next);
+  }
+
   async function act(operation: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -146,9 +175,17 @@ export function TaskboardScreen({ theme, layout, navigation, host }: PluginScree
         setFrameVersion(v => v + 1);
         void boardAddress.refetch();
       }} />}
+      {view === "board" && <View accessibilityLabel="面板缩放" style={[styles.row, { gap: 4, marginLeft: "auto" }]}>
+        <Button styles={styles} busy={false} title="－" disabled={zoom <= zoomSteps[0]} onPress={() => stepZoom(-1)} />
+        <Pressable accessibilityRole="button" accessibilityLabel="重置缩放" onPress={() => applyZoom(1)}
+          style={[styles.button, { paddingVertical: 9 }]}>
+          <Text style={styles.text}>{Math.round(zoom * 100)}%</Text>
+        </Pressable>
+        <Button styles={styles} busy={false} title="＋" disabled={zoom >= zoomSteps[zoomSteps.length - 1]} onPress={() => stepZoom(1)} />
+      </View>}
     </View>
     {view === "board" ? <View style={{ flex: 1, minHeight: 0 }}>
-      {boardAddress.data && !boardAddress.error && <TaskboardFrame key={`${host.id}:${frameVersion}`} url={boardAddress.data.url} color={theme.colors.foreground} loadModels={catalog} />}
+      {boardAddress.data && !boardAddress.error && <TaskboardFrame key={`${host.id}:${frameVersion}`} url={boardAddress.data.url} color={theme.colors.foreground} loadModels={catalog} zoom={zoom} />}
       {boardAddress.isPending && <Text style={[styles.muted, { padding: 20 }]}>正在连接任务面板…</Text>}
       {!!boardAddress.error && <View style={{ padding: 20, gap: 12 }}>
         <Text style={styles.text}>无法连接任务面板：{boardAddress.error instanceof Error ? boardAddress.error.message : String(boardAddress.error)}</Text>

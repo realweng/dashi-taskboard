@@ -10,7 +10,7 @@ Paseo 0.15+ 插件，用现有订阅额度分派 Taskboard 任务。第一版支
 paseo plugin install /absolute/path/to/dashi-taskboard/integrations/paseo
 ```
 
-打开侧栏 **Taskboard**，默认直接在 Paseo 插件内容区显示完整任务看板。顶部 **自动调度** 页签用于配置和查看执行；在其中的连接设置填写本机 packaged `taskctl`、Paseo CLI 的精确路径。`runtimeFile` 留空使用当前 Launcher descriptor；隔离预览时填写独立 descriptor。Taskboard 服务必须包含本插件配套的 `paseo` 会话归属支持，旧的已安装服务需要更新后才能领取任务。不要把新代码的 CLI 指向不支持该字段的旧服务。
+打开侧栏 **Taskboard**，默认直接在 Paseo 插件内容区显示完整任务看板。页签行右侧的 **－ / ＋** 缩放面板（80%–200%，点百分比重置为 100%），缩放偏好保存在本机，重载后保持。顶部 **自动调度** 页签用于配置和查看执行；在其中的连接设置填写本机 packaged `taskctl`、Paseo CLI 的精确路径。`runtimeFile` 留空使用当前 Launcher descriptor；隔离预览时填写独立 descriptor。Taskboard 服务必须包含本插件配套的 `paseo` 会话归属支持，旧的已安装服务需要更新后才能领取任务。不要把新代码的 CLI 指向不支持该字段的旧服务。
 
 选择项目和精确目录，给要启用的 agent 选择实际模型及对应账户额度池。现有 Paseo profile 的说明会显示在页面中，可以应用其模型、运行模式、推理选项和 features。没有合适 profile 时，模型列表来自 daemon 实际返回值。
 
