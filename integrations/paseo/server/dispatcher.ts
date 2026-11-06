@@ -140,8 +140,7 @@ export class Dispatcher {
             waiting.push(`${task.identifier || task.id} 等待 ${requested} 启用或账户额度恢复`);
             continue;
           }
-          await this.launch(current, project.workspacePath, lane, ranked[0].route, comments.comments, attachments.attachments, board);
-          launched++;
+          if (await this.launch(current, project.workspacePath, lane, ranked[0].route, comments.comments, attachments.attachments, board)) launched++;
         }
       }
       this.state.message = launched ? `已分派 ${launched} 个任务。` : waiting.join("；") || "没有可新领取的任务；已有任务继续在 Paseo 中执行。";
@@ -150,13 +149,15 @@ export class Dispatcher {
     } finally { this.busy = false; }
   }
 
-  private async launch(task: Issue, source: string, lane: string, route: Route, comments: { body: string }[], attachments: unknown[], board: Taskctl) {
+  private async launch(task: Issue, source: string, lane: string, route: Route, comments: { body: string }[], attachments: unknown[], board: Taskctl): Promise<boolean> {
     // A requested worktree is reused exactly; otherwise Paseo owns an isolated branch.
     const branchName = `paseo/${task.identifier || task.id}-${Date.now().toString(36)}`;
+    const context = task.developmentContext;
     const workspace = await this.paseo.workspaces.create({ title: task.title,
-      source: task.developmentContext?.type === "worktree" && task.developmentContext.path
-        ? { kind: "directory", path: task.developmentContext.path }
-        : { kind: "worktree", cwd: source, action: "branch-off", baseBranch: "origin/main", branchName },
+      source: context?.type === "worktree" && context.path
+        ? { kind: "directory", path: context.path }
+        : { kind: "worktree", cwd: source, action: "branch-off",
+            baseBranch: context?.type === "branch" && context.branch ? context.branch : "origin/main", branchName },
     });
     const agent = await workspace.agents.create({ config: {
       provider: `${route.provider}/${route.model}`, modeId: route.modeId,
@@ -166,8 +167,17 @@ export class Dispatcher {
     });
     const attribution = ["--agent-platform", "paseo", "--session-id", agent.id];
     const { stdout: branch } = await execute("git", ["-C", workspace.directory!, "branch", "--show-current"]);
-    // CAS happens before sending a work prompt. A competing owner wins normally.
-    const claimed = await board.call<{ task: Issue }>("issue", "move", task.id, "--status", "in_progress", "--if-version", String(task.version), ...attribution);
+    // CAS happens before sending a work prompt. A competing owner wins normally;
+    // a lost race releases the unused workspace/agent and the tick moves on.
+    let claimed: { task: Issue };
+    try {
+      claimed = await board.call<{ task: Issue }>("issue", "move", task.id, "--status", "in_progress", "--if-version", String(task.version), ...attribution);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("VERSION_CONFLICT")) throw error;
+      await agent.archive().catch(() => {});
+      await workspace.archive().catch(() => {});
+      return false;
+    }
     const run: TaskRun = { issueId: task.id, projectId: task.projectId, title: task.title,
       agentId: agent.id, workspaceId: workspace.id, serverId: agent.address.serverId,
       provider: route.provider, model: route.model, quotaId: route.quotaId,
@@ -195,6 +205,7 @@ export class Dispatcher {
       await this.persist();
       throw error;
     }
+    return true;
   }
 
   private async downloadAttachments(board: Taskctl, agentId: string, attachments: unknown[]) {
@@ -202,8 +213,8 @@ export class Dispatcher {
     await mkdir(directory, { recursive: true });
     const records: { id: string; path: string }[] = [];
     for (const entry of attachments) {
-      const item = z.object({ id: z.string(), fileName: z.string().optional(), name: z.string().optional() }).parse(entry);
-      const extension = path.extname(item.fileName || item.name || "").replace(/[^.a-zA-Z0-9]/g, "");
+      const item = z.object({ id: z.string(), filename: z.string().optional(), fileName: z.string().optional(), name: z.string().optional() }).parse(entry);
+      const extension = path.extname(item.filename || item.fileName || item.name || "").replace(/[^.a-zA-Z0-9]/g, "");
       const localPath = path.join(directory, `${records.length}${extension}`);
       await board.call("attachment", "download", item.id, "--output", localPath);
       records.push({ id: item.id, path: localPath });
@@ -246,11 +257,13 @@ export class Dispatcher {
     const attribution = ["--agent-platform", "paseo", "--session-id", run.agentId];
     run.message = completion?.summary || result.error || result.lastMessage || "执行结束，未返回可确认的完成报告。";
     await board.call("comment", "add", run.issueId, "--body", `Paseo 执行结果（${run.provider}/${run.model}）\n${run.message}`, ...attribution);
+    // CAS with the version read at completion time: edits made while the agent
+    // ran (title, labels, …) must not fail the final write-back.
     if (ready) {
-      const moved = await board.call<{ task: Issue }>("issue", "move", run.issueId, "--status", "in_review", "--if-version", String(run.version), ...attribution);
+      const moved = await board.call<{ task: Issue }>("issue", "move", run.issueId, "--status", "in_review", "--if-version", String(task.version), ...attribution);
       run.version = moved.task.version; run.status = "in_review";
     } else {
-      const moved = await board.call<{ task: Issue }>("issue", "move", run.issueId, "--status", "blocked", "--if-version", String(run.version), ...attribution);
+      const moved = await board.call<{ task: Issue }>("issue", "move", run.issueId, "--status", "blocked", "--if-version", String(task.version), ...attribution);
       run.version = moved.task.version; run.status = "blocked";
     }
     await this.persist();
