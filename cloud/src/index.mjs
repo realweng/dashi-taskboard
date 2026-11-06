@@ -502,6 +502,7 @@ function taskFromRow(row) {
     threadBinding: threadBindingFromRow(row),
     legacyLocalThreadId: legacyLocalThreadIdFromRow(row),
     agentSession: agentSessionFromRow(row),
+    executionTarget: row.execution_target == null ? null : JSON.parse(row.execution_target),
     creatorType: row.creator_type,
     creatorId: row.creator_id,
     creatorName: row.creator_name,
@@ -1148,7 +1149,7 @@ async function createTask(env, input, actor) {
         assignee_type, assignee_id, assignee_name, assignee_avatar_url,
         development_context_type, development_branch,
         start_date, due_date, recurrence_interval, recurrence_unit,
-        archived_at, version, created_at, updated_at, agent_session
+        archived_at, version, created_at, updated_at, agent_session, execution_target
       )
       SELECT
         ?,
@@ -1167,7 +1168,7 @@ async function createTask(env, input, actor) {
         ?, ?, ?, ?,
         ?, ?,
         ?, ?, ?, ?,
-        NULL, 1, ?, ?, ?
+        NULL, 1, ?, ?, ?, ?
       FROM projects
       WHERE projects.id = ?
     `).bind(
@@ -1199,6 +1200,7 @@ async function createTask(env, input, actor) {
       timestamp,
       timestamp,
       input.agentSession ? JSON.stringify(input.agentSession) : null,
+      input.executionTarget ? JSON.stringify(input.executionTarget) : null,
       input.projectId,
     ),
     env.DB.prepare(`
@@ -1303,6 +1305,7 @@ async function updateTask(env, id, input, actor) {
     labels: "labels",
     startDate: "start_date",
     dueDate: "due_date",
+    executionTarget: "execution_target",
   };
   for (const [key, value] of Object.entries(input.changes)) {
     if (key === "developmentContext") {
@@ -1313,7 +1316,7 @@ async function updateTask(env, id, input, actor) {
       values.push(value?.interval ?? null, value?.unit ?? null);
     } else {
       assignments.push(`${columns[key]} = ?`);
-      values.push(key === "labels" ? JSON.stringify(value) : value);
+      values.push(key === "labels" || (key === "executionTarget" && value !== null) ? JSON.stringify(value) : value);
     }
   }
   const statusChanged = Object.hasOwn(input.changes, "status")

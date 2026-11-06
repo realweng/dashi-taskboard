@@ -10,8 +10,8 @@ export function parseAgentSession(value) {
   if (value === undefined || value === null) return value;
   assertPlainObject(value);
   assertAllowedKeys(value, new Set(["platform", "sessionId"]));
-  if (!["claude", "pi", "agy", "grok"].includes(value.platform)) {
-    throw new ApiError(400, "INVALID_FIELD", "agentSession.platform must be claude, pi, agy, or grok");
+  if (!["claude", "pi", "agy", "grok", "paseo"].includes(value.platform)) {
+    throw new ApiError(400, "INVALID_FIELD", "agentSession.platform must be claude, pi, agy, grok, or paseo");
   }
   const { platform, sessionId } = value;
   const maxLength = platform === "pi" ? 4096 : 256;
@@ -149,11 +149,26 @@ export function parseCommentPatch(body) {
   };
 }
 
+export function parseExecutionTarget(value) {
+  if (value === undefined || value === null) return value;
+  assertPlainObject(value);
+  assertAllowedKeys(value, new Set(["provider", "model"]));
+  if (!["claude", "codex", "kimi", "pi"].includes(value.provider)) {
+    throw new ApiError(400, "INVALID_FIELD", "executionTarget.provider must be claude, codex, kimi, or pi");
+  }
+  return {
+    provider: value.provider,
+    ...(value.model === undefined ? {} : {
+      model: stringField(value.model, "executionTarget.model", { required: true, maxLength: 256 }),
+    }),
+  };
+}
+
 export function parseTaskCreate(body, parseDevelopmentContext) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "projectId", "title", "description", "status", "priority", "labels", "sortOrder", "threadId", "threadBinding", "agentSession",
-    "assigneeTarget", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "developmentContext", "startDate", "dueDate", "recurrence", "executionTarget",
   ]));
   const projectId = validateProjectId(body.projectId ?? DEFAULT_PROJECT_ID);
   const task = {
@@ -167,6 +182,7 @@ export function parseTaskCreate(body, parseDevelopmentContext) {
     threadId: parseThreadId(body.threadId),
     threadBinding: parseThreadBinding(body.threadBinding),
     agentSession: parseInputAgentSession(body),
+    executionTarget: parseExecutionTarget(body.executionTarget ?? null),
     assigneeTarget: parseAssigneeTarget(body.assigneeTarget),
     developmentContext: parseDevelopmentContext(body.developmentContext ?? null),
     startDate: parseDueDate(body.startDate ?? null, "startDate"),
@@ -184,7 +200,7 @@ function assertTaskPatchBody(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "version", "projectId", "title", "description", "status", "priority", "labels", "threadId", "threadBinding", "agentSession",
-    "assigneeTarget", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "developmentContext", "startDate", "dueDate", "recurrence", "executionTarget",
   ]));
 }
 
@@ -200,6 +216,7 @@ function parseTaskPatchChanges(body, parseDevelopmentContext) {
   if (body.startDate !== undefined) changes.startDate = parseDueDate(body.startDate, "startDate");
   if (body.dueDate !== undefined) changes.dueDate = parseDueDate(body.dueDate);
   if (body.recurrence !== undefined) changes.recurrence = parseRecurrence(body.recurrence);
+  if (body.executionTarget !== undefined) changes.executionTarget = parseExecutionTarget(body.executionTarget);
   return changes;
 }
 

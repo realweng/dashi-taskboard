@@ -7,6 +7,7 @@ export function agentPlatformLabel(platform: AgentPlatform | "codex") {
     case "pi": return "Pi";
     case "agy": return "Google Antigravity (AGY)";
     case "grok": return "Grok";
+    case "paseo": return "Paseo";
   }
 }
 
@@ -22,5 +23,6 @@ export function sessionResumeCommand(platform: AgentPlatform | "codex", sessionI
     case "pi": return `pi --session ${argument}`;
     case "agy": return `agy --conversation ${argument}`;
     case "grok": return `grok --resume ${argument}`;
+    case "paseo": return `paseo agent open ${argument}`;
   }
 }

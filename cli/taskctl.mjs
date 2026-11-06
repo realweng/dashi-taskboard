@@ -151,7 +151,7 @@ Examples:
   taskctl comment list LOCAL-275 --json
 
 Conversation attribution for issue/comment writes:
-  --agent-platform claude|pi|agy|grok --session-id ID
+  --agent-platform claude|pi|agy|grok|paseo --session-id ID
   Or keep Codex --thread-id ID / CODEX_THREAD_ID.
   External options must be supplied together and ignore CODEX_THREAD_ID.
   --binding-* options remain separate native Codex bindings.
@@ -190,7 +190,7 @@ Actions:
   relation add|remove ISSUE_ID --type parent|blocks|blocked_by|related
     --issue RELATED_ISSUE_ID [--thread-id ID] [--if-version N] [--json]
 
-All issue writes accept --agent-platform claude|pi|agy|grok --session-id ID
+All issue writes accept --agent-platform claude|pi|agy|grok|paseo --session-id ID
 instead of Codex --thread-id / CODEX_THREAD_ID. Both external options are required.
 External metadata does not replace --binding-* native Codex identity.
 Update also accepts only external session metadata plus --if-version.
@@ -201,7 +201,7 @@ Priorities: none, urgent, high, medium, low
 Example:
   taskctl issue get LOCAL-275 --json`],
   ["comment add", `Usage: taskctl comment add ISSUE_ID (--body TEXT | --body-file FILE)
-  [--thread-id ID | --agent-platform claude|pi|agy|grok --session-id ID]
+  [--thread-id ID | --agent-platform claude|pi|agy|grok|paseo --session-id ID]
   [--binding-thread-id ID
     [--binding-codex-project-id ID --binding-codex-project-kind local|remote
      --binding-codex-host-id ID --binding-workspace-path PATH]
@@ -211,11 +211,11 @@ External attribution requires both options; Pi accepts a full session path or ID
 CODEX_THREAD_ID is used only when no external attribution is supplied.
 Binding options remain independent, native Codex identity.`],
   ["comment update", `Usage: taskctl comment update COMMENT_ID --body TEXT --if-version N
-  [--thread-id ID | --agent-platform claude|pi|agy|grok --session-id ID] [--json]
+  [--thread-id ID | --agent-platform claude|pi|agy|grok|paseo --session-id ID] [--json]
 
 External attribution requires both options; otherwise Codex uses CODEX_THREAD_ID.`],
   ["comment delete", `Usage: taskctl comment delete COMMENT_ID --if-version N
-  [--thread-id ID | --agent-platform claude|pi|agy|grok --session-id ID] [--json]
+  [--thread-id ID | --agent-platform claude|pi|agy|grok|paseo --session-id ID] [--json]
 
 Deleting a comment removes its saved session metadata with it.`],
   ["comment list", `Usage: taskctl comment list ISSUE_ID [--after CURSOR] [--json]
